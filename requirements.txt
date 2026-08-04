@@ -1,0 +1,6 @@
+discord.py>=2.3.2
+supabase>=2.0.0
+qrcode>=7.4.2
+pillow>=10.0.0
+crcmod>=1.7
+python-dotenv>=1.0.0
