@@ -99,6 +99,7 @@ class CatalogView(discord.ui.View):
 
     @discord.ui.button(label="Comprar 🛒", style=discord.ButtonStyle.success)
     async def buy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(thinking=True, ephemeral=True)
         product = self.products[self.index]
         
         # Registra pedido no banco
@@ -146,7 +147,7 @@ class CatalogView(discord.ui.View):
         pix_embed.add_field(name="Chave PIX (Copia e Cola)", value=f"```{pix_code}```", inline=False)
         pix_embed.set_image(url="attachment://pix_qr.png")
 
-        await interaction.response.send_message(f"✅ Pedido criado com sucesso! Veja seu tópico privado: {thread.mention}", ephemeral=True)
+        await interaction.followup.send(f"✅ Pedido criado com sucesso! Veja seu tópico privado: {thread.mention}", ephemeral=True)
         await thread.send(embed=pix_embed, file=file)
 
     @discord.ui.button(label="Próximo ▶", style=discord.ButtonStyle.secondary)
@@ -161,27 +162,29 @@ class Store(commands.Cog):
 
     @app_commands.command(name="loja", description="Mostra o catálogo de produtos disponíveis")
     async def loja(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True, ephemeral=True)
         res = supabase.table("products").select("*").execute()
         products = res.data
 
         if not products:
-            await interaction.response.send_message("❌ Não há produtos cadastrados no momento.", ephemeral=True)
+            await interaction.followup.send("❌ Não há produtos cadastrados no momento.", ephemeral=True)
             return
 
         view = CatalogView(products)
-        await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=True)
+        await interaction.followup.send(embed=view.get_embed(), view=view, ephemeral=True)
 
     @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
     @app_commands.describe(name="Nome do produto", description="Descrição", price="Preço em reais", image_url="Link da imagem")
     @is_admin()
     async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, image_url: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
         supabase.table("products").insert({
             "name": name,
             "description": description,
             "price": price,
             "image_url": image_url
         }).execute()
-        await interaction.response.send_message(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
+        await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Store(bot))
