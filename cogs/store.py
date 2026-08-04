@@ -186,4 +186,7 @@ class Store(commands.Cog):
             await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
         except Exception as e:
             error_msg = traceback.format_exc()
-            await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{
+            await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(Store(bot))
