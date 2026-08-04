@@ -116,7 +116,7 @@ class CatalogView(discord.ui.View):
 
         # Cria Tópico Privado
         thread = await interaction.channel.create_thread(
-            name=f"🛒-pedido-{order['id']}-{interaction.user.name}",
+            name=f"pedido-{order['id']}-{interaction.user.name}",
             type=discord.ChannelType.private_thread,
             auto_archive_duration=1440
         )
