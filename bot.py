@@ -22,9 +22,12 @@ class SalesBot(commands.Bot):
 
     async def setup_hook(self):
         await self.load_extension("cogs.store")
-        await self.tree.sync()
-        print("Comandos Slash e Cogs carregados com sucesso!")
-
+        
+        guild_id = discord.Object(id=1534239276160778260)
+        self.tree.copy_global_to(guild=guild=guild_id)
+        await self.tree.sync(guild=guild_id)
+        
+        print("Comandos Slash sincronizados no servidor!")
 bot = SalesBot()
 
 # --- SERVER WEB PARA O PLANO FREE DO RENDER ---
