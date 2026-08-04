@@ -149,6 +149,9 @@ class Store(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @app_commands.command(name="loja", description="Abre a loja de produtos")
+    async def loja(self, interaction: discord.Interaction):
+        await interaction.response.send_message("Bem-vindo à loja!", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Store(bot))
