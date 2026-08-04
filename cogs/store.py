@@ -144,6 +144,11 @@ class CatalogView(discord.ui.View):
         pix_embed.add_field(name="Produto", value=product['name'], inline=True)
         pix_embed.add_field(name="Valor", value=f"R$ {product['price']:.2f}", inline=True)
         pix_embed.add_field(name="Chave PIX (Copia e Cola)", value=f"```{pix_code}```")
-        
+
+class Store(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+
 async def setup(bot):
-        await bot.add_cog(Store(bot))
+    await bot.add_cog(Store(bot))
