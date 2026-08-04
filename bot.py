@@ -24,7 +24,7 @@ class SalesBot(commands.Bot):
         await self.load_extension("cogs.store")
         
         guild_id = discord.Object(id=1534239276160778260)
-        self.tree.copy_global_to(guild=guild=guild_id)
+        self.tree.copy_global_to(guild=guild_id)
         await self.tree.sync(guild=guild_id)
         
         print("Comandos Slash sincronizados no servidor!")
