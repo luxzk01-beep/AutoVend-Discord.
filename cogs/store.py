@@ -74,6 +74,9 @@ class CatalogView(discord.ui.View):
         self.index = index
 
     def get_embed(self):
+        if not self.products:
+            return discord.Embed(title="Loja Vazia", description="Não há produtos cadastrados.", color=discord.Color.red())
+        
         product = self.products[self.index]
         embed = discord.Embed(
             title=product['name'],
@@ -81,17 +84,24 @@ class CatalogView(discord.ui.View):
             color=discord.Color.blue()
         )
         embed.add_field(name="Preço", value=f"**R$ {product['price']:.2f}**", inline=False)
-        embed.set_image(url=product['image_url'])
+        if product.get('image_url'):
+            embed.set_image(url=product['image_url'])
         embed.set_footer(text=f"Produto {self.index + 1} de {len(self.products)}")
         return embed
 
     @discord.ui.button(label="◀ Anterior", style=discord.ButtonStyle.secondary)
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.products:
+            return
         self.index = (self.index - 1) % len(self.products)
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
     @discord.ui.button(label="Comprar 🛒", style=discord.ButtonStyle.success)
     async def buy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.products:
+            await interaction.response.send_message("❌ Nenhum produto disponível para compra.", ephemeral=True)
+            return
+
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             product = self.products[self.index]
@@ -146,6 +156,8 @@ class CatalogView(discord.ui.View):
 
     @discord.ui.button(label="Próximo ▶", style=discord.ButtonStyle.secondary)
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.products:
+            return
         self.index = (self.index + 1) % len(self.products)
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
@@ -161,7 +173,7 @@ class Store(commands.Cog):
             products = res.data
 
             if not products:
-                await interaction.followup.send("❌ Não há produtos cadastrados no momento.", ephemeral=True)
+                await interaction.followup.send("❌ Não há produtos cadastrados no momento. Use `/adicionar_produto` para cadastrar.", ephemeral=True)
                 return
 
             view = CatalogView(products)
