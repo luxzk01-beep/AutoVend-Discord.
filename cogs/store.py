@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- CONFIGURAÇÕES DE AMBIENTE ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 ADMIN_ROLE_ID = int(os.getenv("ADMIN_ROLE_ID", "0"))
@@ -19,11 +18,8 @@ PIX_KEY = os.getenv("PIX_KEY", "")
 PIX_CITY = os.getenv("PIX_CITY", "BRASILIA")
 PIX_NAME = os.getenv("PIX_NAME", "VENDEDOR")
 
-# --- CONEXÃO COM SUPABASE ---
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-
-# --- GERADOR DE PAYLOAD PIX (BR CODE) ---
 def format_tlv(id_str: str, value: str) -> str:
     return f"{id_str}{len(value):02d}{value}"
 
@@ -60,8 +56,6 @@ def generate_pix_payload(key: str, name: str, city: str, amount: float, identifi
     
     return payload + crc_value
 
-
-# --- DECORADOR DE PERMISSÃO ADM ---
 def is_admin():
     async def predicate(interaction: discord.Interaction) -> bool:
         if interaction.user.guild_permissions.administrator:
@@ -72,8 +66,6 @@ def is_admin():
         return False
     return app_commands.check(predicate)
 
-
-# --- VIEWS (BOTÕES E INTERFACES) ---
 class CatalogView(discord.ui.View):
     def __init__(self, products, index=0):
         super().__init__(timeout=180)
@@ -102,27 +94,13 @@ class CatalogView(discord.ui.View):
         await interaction.response.defer(thinking=True, ephemeral=True)
         product = self.products[self.index]
         
-        # Registra pedido no banco
-        res = supabase.table("orders").insert({
-            "buyer_id": interaction.user.id,
-            "buyer_name": str(interaction.user),
-            "product_id": product['id'],
-            "product_name": product['name'],
-            "price": product['price'],
-            "status": "pendente"
-        }).execute()
-        
-        order = res.data[0]
-
-        # Cria Tópico Privado
         thread = await interaction.channel.create_thread(
-            name=f"pedido-{order['id']}-{interaction.user.name}",
+            name=f"pedido-{product['name']}-{interaction.user.name}",
             type=discord.ChannelType.private_thread,
             auto_archive_duration=1440
         )
         await thread.add_user(interaction.user)
 
-        # Gera Chave PIX e QR Code
         pix_code = generate_pix_payload(
             key=PIX_KEY,
             name=PIX_NAME,
@@ -138,7 +116,7 @@ class CatalogView(discord.ui.View):
         file = discord.File(buf, filename="pix_qr.png")
 
         pix_embed = discord.Embed(
-            title=f"Pedido #{order['id']} Criado com Sucesso!",
+            title="Pedido Criado com Sucesso!",
             description=f"Olá {interaction.user.mention}, efetue o pagamento para concluir a compra.",
             color=discord.Color.gold()
         )
@@ -154,7 +132,6 @@ class CatalogView(discord.ui.View):
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = (self.index + 1) % len(self.products)
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
-
 
 class Store(commands.Cog):
     def __init__(self, bot):
@@ -178,12 +155,15 @@ class Store(commands.Cog):
     @is_admin()
     async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, image_url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
+        
+        # Teste direto sem salvar no banco por enquanto para ver se responde
         supabase.table("products").insert({
             "name": name,
             "description": description,
             "price": price,
             "image_url": image_url
         }).execute()
+
         await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
 
 async def setup(bot):
