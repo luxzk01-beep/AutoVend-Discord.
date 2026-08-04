@@ -1,5 +1,6 @@
 import os
 import io
+import traceback
 import crcmod
 import qrcode
 import discord
@@ -92,41 +93,56 @@ class CatalogView(discord.ui.View):
     @discord.ui.button(label="Comprar 🛒", style=discord.ButtonStyle.success)
     async def buy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(thinking=True, ephemeral=True)
-        product = self.products[self.index]
-        
-        thread = await interaction.channel.create_thread(
-            name=f"pedido-{product['name']}-{interaction.user.name}",
-            type=discord.ChannelType.private_thread,
-            auto_archive_duration=1440
-        )
-        await thread.add_user(interaction.user)
+        try:
+            product = self.products[self.index]
+            
+            res = supabase.table("orders").insert({
+                "buyer_id": interaction.user.id,
+                "buyer_name": str(interaction.user),
+                "product_id": product['id'],
+                "product_name": product['name'],
+                "price": product['price'],
+                "status": "pendente"
+            }).execute()
+            
+            order = res.data[0]
 
-        pix_code = generate_pix_payload(
-            key=PIX_KEY,
-            name=PIX_NAME,
-            city=PIX_CITY,
-            amount=product['price'],
-            identifier=interaction.user.name
-        )
+            thread = await interaction.channel.create_thread(
+                name=f"pedido-{order['id']}-{interaction.user.name}",
+                type=discord.ChannelType.private_thread,
+                auto_archive_duration=1440
+            )
+            await thread.add_user(interaction.user)
 
-        qr = qrcode.make(pix_code)
-        buf = io.BytesIO()
-        qr.save(buf, format='PNG')
-        buf.seek(0)
-        file = discord.File(buf, filename="pix_qr.png")
+            pix_code = generate_pix_payload(
+                key=PIX_KEY,
+                name=PIX_NAME,
+                city=PIX_CITY,
+                amount=product['price'],
+                identifier=interaction.user.name
+            )
 
-        pix_embed = discord.Embed(
-            title="Pedido Criado com Sucesso!",
-            description=f"Olá {interaction.user.mention}, efetue o pagamento para concluir a compra.",
-            color=discord.Color.gold()
-        )
-        pix_embed.add_field(name="Produto", value=product['name'], inline=True)
-        pix_embed.add_field(name="Valor", value=f"R$ {product['price']:.2f}", inline=True)
-        pix_embed.add_field(name="Chave PIX (Copia e Cola)", value=f"```{pix_code}```", inline=False)
-        pix_embed.set_image(url="attachment://pix_qr.png")
+            qr = qrcode.make(pix_code)
+            buf = io.BytesIO()
+            qr.save(buf, format='PNG')
+            buf.seek(0)
+            file = discord.File(buf, filename="pix_qr.png")
 
-        await interaction.followup.send(f"✅ Pedido criado com sucesso! Veja seu tópico privado: {thread.mention}", ephemeral=True)
-        await thread.send(embed=pix_embed, file=file)
+            pix_embed = discord.Embed(
+                title=f"Pedido #{order['id']} Criado com Sucesso!",
+                description=f"Olá {interaction.user.mention}, efetue o pagamento para concluir a compra.",
+                color=discord.Color.gold()
+            )
+            pix_embed.add_field(name="Produto", value=product['name'], inline=True)
+            pix_embed.add_field(name="Valor", value=f"R$ {product['price']:.2f}", inline=True)
+            pix_embed.add_field(name="Chave PIX (Copia e Cola)", value=f"```{pix_code}```", inline=False)
+            pix_embed.set_image(url="attachment://pix_qr.png")
+
+            await interaction.followup.send(f"✅ Pedido criado com sucesso! Veja seu tópico privado: {thread.mention}", ephemeral=True)
+            await thread.send(embed=pix_embed, file=file)
+        except Exception as e:
+            error_msg = traceback.format_exc()
+            await interaction.followup.send(f"❌ Erro ao processar compra:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
 
     @discord.ui.button(label="Próximo ▶", style=discord.ButtonStyle.secondary)
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -140,31 +156,34 @@ class Store(commands.Cog):
     @app_commands.command(name="loja", description="Mostra o catálogo de produtos disponíveis")
     async def loja(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True, ephemeral=True)
-        res = supabase.table("products").select("*").execute()
-        products = res.data
+        try:
+            res = supabase.table("products").select("*").execute()
+            products = res.data
 
-        if not products:
-            await interaction.followup.send("❌ Não há produtos cadastrados no momento.", ephemeral=True)
-            return
+            if not products:
+                await interaction.followup.send("❌ Não há produtos cadastrados no momento.", ephemeral=True)
+                return
 
-        view = CatalogView(products)
-        await interaction.followup.send(embed=view.get_embed(), view=view, ephemeral=True)
+            view = CatalogView(products)
+            await interaction.followup.send(embed=view.get_embed(), view=view, ephemeral=True)
+        except Exception as e:
+            error_msg = traceback.format_exc()
+            await interaction.followup.send(f"❌ Erro ao abrir a loja:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
 
     @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
     @app_commands.describe(name="Nome do produto", description="Descrição", price="Preço em reais", image_url="Link da imagem")
     @is_admin()
     async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, image_url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
-        
-        # Teste direto sem salvar no banco por enquanto para ver se responde
-        supabase.table("products").insert({
-            "name": name,
-            "description": description,
-            "price": price,
-            "image_url": image_url
-        }).execute()
+        try:
+            supabase.table("products").insert({
+                "name": name,
+                "description": description,
+                "price": price,
+                "image_url": image_url
+            }).execute()
 
-        await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
-
-async def setup(bot):
-    await bot.add_cog(Store(bot))
+            await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
+        except Exception as e:
+            error_msg = traceback.format_exc()
+            await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{
