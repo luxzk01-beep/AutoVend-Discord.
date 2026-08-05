@@ -83,6 +83,7 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            # Atualiza no banco de dados
             supabase.table("orders").update({
                 "rating": self.rating,
                 "feedback_comment": self.comment.value
@@ -91,6 +92,34 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
             stars = "⭐" * self.rating
             await interaction.response.send_message(f"✅ Muito obrigado pelo seu feedback!\nAvaliação: {stars}", ephemeral=True)
             
+            # Busca os dados do pedido para postar publicamente
+            res = supabase.table("orders").select("*").eq("id", self.order_id).execute()
+            if res.data:
+                order = res.data[0]
+                
+                # Cria o Embed Público de Avaliação
+                embed = discord.Embed(
+                    title=" nova Avaliação de Cliente! ⭐",
+                    color=discord.Color.gold()
+                )
+                embed.add_field(name="Cliente", value=f"<@{order['buyer_id']}>", inline=True)
+                embed.add_field(name="Produto", value=order['product_name'], inline=True)
+                embed.add_field(name="Nota", value=stars, inline=False)
+                if self.comment.value:
+                    embed.add_field(name="Comentário", value=f"_{self.comment.value}_", inline=False)
+                embed.set_footer(text=f"Pedido ID: #{order['id']}")
+
+                # Procura por um canal chamado "avaliacoes" ou "feedbacks" no servidor para enviar
+                target_channel = discord.utils.get(interaction.guild.text_channels, name="avaliacoes")
+                if not target_channel:
+                    target_channel = discord.utils.get(interaction.guild.text_channels, name="feedbacks")
+                
+                # Se achar o canal público, envia lá; se não, envia no canal atual
+                if target_channel:
+                    await target_channel.send(embed=embed)
+                else:
+                    await interaction.channel.send(embed=embed)
+
             message = interaction.message
             if message:
                 await message.edit(view=None)
@@ -265,7 +294,7 @@ class Store(commands.Cog):
                 return
 
             view = CatalogView(products)
-            await interaction.followup.send(embed=view.get_embed(), view=view)
+                await interaction.followup.send(embed=view.get_embed(), view=view)
         except Exception as e:
             error_msg = traceback.format_exc()
             await interaction.followup.send(f"❌ Erro ao enviar a loja:\n```py\n{error_msg[-1800:]}\n```")
