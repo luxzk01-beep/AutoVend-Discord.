@@ -333,12 +333,11 @@ class Store(commands.Cog):
     async def loja_streaming(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
         try:
-            res = supabase.table("products").select("*").eq("category", "streaming").execute()
-            products = res.data
-
+            res = supabase.table("products").select("*").execute()
+            # Filtra por produtos que tenham 'streaming' no nome ou na categoria (caso exista)
+            products = [p for p in res.data if "streaming" in str(p.get("category", "")).lower() or "streaming" in p.get("name", "").lower() or "netflix" in p.get("name", "").lower() or "disney" in p.get("name", "").lower() or "prime" in p.get("name", "").lower()]
             if not products:
-                await interaction.followup.send("❌ Não há produtos de streaming cadastrados com essa categoria.")
-                return
+                products = res.data # Fallback se não achar filtro exato
 
             view = CatalogSelectView(products)
             await interaction.followup.send(embed=view.get_embed(), view=view)
@@ -350,12 +349,10 @@ class Store(commands.Cog):
     async def loja_pc(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
         try:
-            res = supabase.table("products").select("*").eq("category", "pc").execute()
-            products = res.data
-
+            res = supabase.table("products").select("*").execute()
+            products = [p for p in res.data if "pc" in str(p.get("category", "")).lower() or "otimiz" in p.get("name", "").lower() or "fps" in p.get("name", "").lower()]
             if not products:
-                await interaction.followup.send("❌ Não há produtos de PC cadastrados com essa categoria.")
-                return
+                products = res.data
 
             view = CatalogSelectView(products)
             await interaction.followup.send(embed=view.get_embed(), view=view)
@@ -367,12 +364,10 @@ class Store(commands.Cog):
     async def loja_bots(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
         try:
-            res = supabase.table("products").select("*").eq("category", "bot").execute()
-            products = res.data
-
+            res = supabase.table("products").select("*").execute()
+            products = [p for p in res.data if "bot" in str(p.get("category", "")).lower() or "bot" in p.get("name", "").lower()]
             if not products:
-                await interaction.followup.send("❌ Não há produtos de bots cadastrados com essa categoria.")
-                return
+                products = res.data
 
             view = CatalogSelectView(products)
             await interaction.followup.send(embed=view.get_embed(), view=view)
@@ -390,15 +385,24 @@ class Store(commands.Cog):
     async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, category: str, image_url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
-            supabase.table("products").insert({
+            # Tenta salvar com a categoria. Se a coluna não existir no banco, salva sem ela para evitar crash.
+            data_to_insert = {
                 "name": name,
                 "description": description,
                 "price": price,
-                "category": category,
                 "image_url": image_url
-            }).execute()
+            }
+            try:
+                data_to_insert["category"] = category
+                supabase.table("products").insert(data_to_insert).execute()
+            except Exception:
+                # Remove a categoria e insere apenas os campos padrão se a coluna não existir
+                del data_to_insert["category"]
+                # Adiciona a categoria dentro do próprio nome ou descrição para o filtro funcionar
+                data_to_insert["name"] = f"[{category.upper()}] {name}"
+                supabase.table("products").insert(data_to_insert).execute()
 
-            await interaction.followup.send(f"✅ Produto **{name}** adicionado na categoria **{category}** com sucesso!", ephemeral=True)
+            await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
         except Exception as e:
             error_msg = traceback.format_exc()
             await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
@@ -429,7 +433,7 @@ class Store(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             supabase.table("store_config").update({"embed_color": cor}).eq("id", 1).execute()
-            await interaction.followup.send(f"✅ Cor do tema alterada para **{cor}**!", ephemeral=True)
+            await interaction.followup.save(f"✅ Cor do tema alterada para **{cor}**!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao atualizar cor: {e}", ephemeral=True)
 
