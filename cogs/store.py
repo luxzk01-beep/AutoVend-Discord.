@@ -83,7 +83,6 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            # Atualiza no banco de dados
             supabase.table("orders").update({
                 "rating": self.rating,
                 "feedback_comment": self.comment.value
@@ -92,14 +91,12 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
             stars = "⭐" * self.rating
             await interaction.response.send_message(f"✅ Muito obrigado pelo seu feedback!\nAvaliação: {stars}", ephemeral=True)
             
-            # Busca os dados do pedido para postar publicamente
             res = supabase.table("orders").select("*").eq("id", self.order_id).execute()
             if res.data:
                 order = res.data[0]
                 
-                # Cria o Embed Público de Avaliação
                 embed = discord.Embed(
-                    title=" nova Avaliação de Cliente! ⭐",
+                    title="⭐ Nova Avaliação de Cliente!",
                     color=discord.Color.gold()
                 )
                 embed.add_field(name="Cliente", value=f"<@{order['buyer_id']}>", inline=True)
@@ -109,12 +106,10 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
                     embed.add_field(name="Comentário", value=f"_{self.comment.value}_", inline=False)
                 embed.set_footer(text=f"Pedido ID: #{order['id']}")
 
-                # Procura por um canal chamado "avaliacoes" ou "feedbacks" no servidor para enviar
                 target_channel = discord.utils.get(interaction.guild.text_channels, name="avaliacoes")
                 if not target_channel:
                     target_channel = discord.utils.get(interaction.guild.text_channels, name="feedbacks")
                 
-                # Se achar o canal público, envia lá; se não, envia no canal atual
                 if target_channel:
                     await target_channel.send(embed=embed)
                 else:
@@ -268,54 +263,4 @@ class CatalogView(discord.ui.View):
             await thread.send(embed=pix_embed, file=file, view=control_view)
         except Exception as e:
             error_msg = traceback.format_exc()
-            await interaction.followup.send(f"❌ Erro ao processar compra:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
-
-    @discord.ui.button(label="Próximo ▶", style=discord.ButtonStyle.secondary)
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.products:
-            return
-        self.index = (self.index + 1) % len(self.products)
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
-
-class Store(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    @app_commands.command(name="loja", description="Envia o catálogo fixo da loja no canal para todos verem (Admin)")
-    @is_admin()
-    async def loja(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True)
-        try:
-            res = supabase.table("products").select("*").execute()
-            products = res.data
-
-            if not products:
-                await interaction.followup.send("❌ Não há produtos cadastrados no momento. Use `/adicionar_produto` para cadastrar.")
-                return
-
-            view = CatalogView(products)
-                await interaction.followup.send(embed=view.get_embed(), view=view)
-        except Exception as e:
-            error_msg = traceback.format_exc()
-            await interaction.followup.send(f"❌ Erro ao enviar a loja:\n```py\n{error_msg[-1800:]}\n```")
-
-    @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
-    @app_commands.describe(name="Nome do produto", description="Descrição", price="Preço em reais", image_url="Link da imagem")
-    @is_admin()
-    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, image_url: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            supabase.table("products").insert({
-                "name": name,
-                "description": description,
-                "price": price,
-                "image_url": image_url
-            }).execute()
-
-            await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
-        except Exception as e:
-            error_msg = traceback.format_exc()
-            await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
-
-async def setup(bot):
-    await bot.add_cog(Store(bot))
+            await interaction.followup.send(f"❌ Erro ao processar compra:\n```py\n{error_msg[-1800:]}\n
