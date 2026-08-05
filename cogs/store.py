@@ -204,9 +204,10 @@ class ProductSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         view: CatalogSelectView = self.view
         view.index = int(self.values[0])
-        await interaction.response.edit_message(embed=view.get_embed(), view=view)
+        await interaction.edit_original_response(embed=view.get_embed(), view=view)
 
 class CatalogSelectView(discord.ui.View):
     def __init__(self, products, index=0):
