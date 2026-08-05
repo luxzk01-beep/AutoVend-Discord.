@@ -115,9 +115,9 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
                     embed.add_field(name="Comentário", value=f"_{self.comment.value}_", inline=False)
                 embed.set_footer(text=f"Pedido ID: #{order['id']}")
 
-                target_channel = discord.utils.get(interaction.guild.text_channels, name="avaliacoes")
+                target_channel = discord.utils.get(interaction.guild.text_channels, name="vouchers")
                 if not target_channel:
-                    target_channel = discord.utils.get(interaction.guild.text_channels, name="feedbacks")
+                    target_channel = discord.utils.get(interaction.guild.text_channels, name="avaliacoes")
                 
                 if target_channel:
                     await target_channel.send(embed=embed)
@@ -221,7 +221,7 @@ class CatalogSelectView(discord.ui.View):
             return discord.Embed(title="Loja Vazia", description="Não há produtos cadastrados.", color=discord.Color.red())
         
         config_res = supabase.table("store_config").select("*").eq("id", 1).execute()
-        config = config_res.data[0] if config_res.data else {"banner_url": None, "embed_color": "blue"}
+        config = config_res.data[0] if config_res.data else {"banner_url": None, "embed_color": "black"}
         
         color_map = {
             "black": discord.Color.from_rgb(1, 1, 1),
@@ -231,7 +231,7 @@ class CatalogSelectView(discord.ui.View):
             "gold": discord.Color.gold(),
             "purple": discord.Color.purple()
         }
-        embed_color = color_map.get(config.get("embed_color", "blue"), discord.Color.blue())
+        embed_color = color_map.get(config.get("embed_color", "black"), discord.Color.from_rgb(1, 1, 1))
 
         product = self.products[self.index]
         embed = discord.Embed(
@@ -328,50 +328,89 @@ class Store(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="loja", description="Envia o catálogo fixo da loja no canal para todos verem (Admin)")
+    @app_commands.command(name="loja_streaming", description="Envia o catálogo de Streaming (Admin)")
     @is_admin()
-    async def loja(self, interaction: discord.Interaction):
+    async def loja_streaming(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
         try:
-            res = supabase.table("products").select("*").execute()
+            res = supabase.table("products").select("*").eq("category", "streaming").execute()
             products = res.data
 
             if not products:
-                await interaction.followup.send("❌ Não há produtos cadastrados no momento. Use `/adicionar_produto` para cadastrar.")
+                await interaction.followup.send("❌ Não há produtos de streaming cadastrados com essa categoria.")
                 return
 
             view = CatalogSelectView(products)
             await interaction.followup.send(embed=view.get_embed(), view=view)
         except Exception as e:
-            error_msg = traceback.format_exc()
-            await interaction.followup.send(f"❌ Erro ao enviar a loja:\n```py\n{error_msg[-1800:]}\n```")
+            await interaction.followup.send(f"❌ Erro ao enviar loja de streaming: {e}")
+
+    @app_commands.command(name="loja_pc", description="Envia o catálogo de Otimização de PC (Admin)")
+    @is_admin()
+    async def loja_pc(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True)
+        try:
+            res = supabase.table("products").select("*").eq("category", "pc").execute()
+            products = res.data
+
+            if not products:
+                await interaction.followup.send("❌ Não há produtos de PC cadastrados com essa categoria.")
+                return
+
+            view = CatalogSelectView(products)
+            await interaction.followup.send(embed=view.get_embed(), view=view)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro ao enviar loja de PC: {e}")
+
+    @app_commands.command(name="loja_bots", description="Envia o catálogo de Bots (Admin)")
+    @is_admin()
+    async def loja_bots(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True)
+        try:
+            res = supabase.table("products").select("*").eq("category", "bot").execute()
+            products = res.data
+
+            if not products:
+                await interaction.followup.send("❌ Não há produtos de bots cadastrados com essa categoria.")
+                return
+
+            view = CatalogSelectView(products)
+            await interaction.followup.send(embed=view.get_embed(), view=view)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro ao enviar loja de bots: {e}")
 
     @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
-    @app_commands.describe(name="Nome do produto", description="Descrição", price="Preço em reais", image_url="Link da imagem")
+    @app_commands.describe(name="Nome", description="Descrição", price="Preço", category="streaming, pc ou bot", image_url="Link da imagem")
+    @app_commands.choices(category=[
+        app_commands.Choice(name="Streaming", value="streaming"),
+        app_commands.Choice(name="Otimização PC", value="pc"),
+        app_commands.Choice(name="Bots", value="bot")
+    ])
     @is_admin()
-    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, image_url: str):
+    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, category: str, image_url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             supabase.table("products").insert({
                 "name": name,
                 "description": description,
                 "price": price,
+                "category": category,
                 "image_url": image_url
             }).execute()
 
-            await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
+            await interaction.followup.send(f"✅ Produto **{name}** adicionado na categoria **{category}** com sucesso!", ephemeral=True)
         except Exception as e:
             error_msg = traceback.format_exc()
             await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
 
-    @app_commands.command(name="set_banner", description="Altera o banner/imagem principal da loja (Admin)")
+    @app_commands.command(name="set_banner", description="Altera o banner principal da loja (Admin)")
     @app_commands.describe(url="Link direto da imagem do banner")
     @is_admin()
     async def set_banner(self, interaction: discord.Interaction, url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             supabase.table("store_config").update({"banner_url": url}).eq("id", 1).execute()
-            await interaction.followup.send(f"✅ Banner da loja atualizado com sucesso!\n🖼️ **URL:** {url}", ephemeral=True)
+            await interaction.followup.send(f"✅ Banner atualizado com sucesso!\n🖼️ **URL:** {url}", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao atualizar banner: {e}", ephemeral=True)
 
@@ -390,7 +429,7 @@ class Store(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             supabase.table("store_config").update({"embed_color": cor}).eq("id", 1).execute()
-            await interaction.followup.send(f"✅ Cor do tema da loja alterada para **{cor}**!", ephemeral=True)
+            await interaction.followup.send(f"✅ Cor do tema alterada para **{cor}**!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao atualizar cor: {e}", ephemeral=True)
 
