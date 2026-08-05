@@ -252,11 +252,12 @@ class CatalogSelectView(discord.ui.View):
 
     @discord.ui.button(label="Comprar 🛒", style=discord.ButtonStyle.success, row=1)
     async def buy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
         if not self.products:
-            await interaction.response.send_message("❌ Nenhum produto disponível para compra.", ephemeral=True)
+            await interaction.followup.send("❌ Nenhum produto disponível para compra.", ephemeral=True)
             return
 
-        await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             product = self.products[self.index]
             
