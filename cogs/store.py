@@ -84,8 +84,15 @@ class CatalogView(discord.ui.View):
             color=discord.Color.blue()
         )
         embed.add_field(name="Preço", value=f"**R$ {product['price']:.2f}**", inline=False)
-        if product.get('image_url'):
-            embed.set_image(url=product['image_url'])
+        
+        # Validação segura de URL para evitar crash do Discord
+        img_url = product.get('image_url')
+        if img_url and isinstance(img_url, str) and img_url.startswith("http"):
+            try:
+                embed.set_image(url=img_url)
+            except Exception:
+                pass
+
         embed.set_footer(text=f"Produto {self.index + 1} de {len(self.products)}")
         return embed
 
