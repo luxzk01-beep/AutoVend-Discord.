@@ -219,15 +219,27 @@ class CatalogSelectView(discord.ui.View):
         if not self.products:
             return discord.Embed(title="Loja Vazia", description="Não há produtos cadastrados.", color=discord.Color.red())
         
+        config_res = supabase.table("store_config").select("*").eq("id", 1).execute()
+        config = config_res.data[0] if config_res.data else {"banner_url": None, "embed_color": "blue"}
+        
+        color_map = {
+            "blue": discord.Color.blue(),
+            "green": discord.Color.green(),
+            "red": discord.Color.red(),
+            "gold": discord.Color.gold(),
+            "purple": discord.Color.purple()
+        }
+        embed_color = color_map.get(config.get("embed_color", "blue"), discord.Color.blue())
+
         product = self.products[self.index]
         embed = discord.Embed(
             title=product['name'],
             description=product['description'],
-            color=discord.Color.blue()
+            color=embed_color
         )
         embed.add_field(name="Preço", value=f"**R$ {product['price']:.2f}**", inline=False)
         
-        img_url = product.get('image_url')
+        img_url = product.get('image_url') or config.get('banner_url')
         if img_url and isinstance(img_url, str) and img_url.startswith("http"):
             try:
                 embed.set_image(url=img_url)
@@ -348,6 +360,35 @@ class Store(commands.Cog):
         except Exception as e:
             error_msg = traceback.format_exc()
             await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
+
+    @app_commands.command(name="set_banner", description="Altera o banner/imagem principal da loja (Admin)")
+    @app_commands.describe(url="Link direto da imagem do banner")
+    @is_admin()
+    async def set_banner(self, interaction: discord.Interaction, url: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            supabase.table("store_config").update({"banner_url": url}).eq("id", 1).execute()
+            await interaction.followup.send(f"✅ Banner da loja atualizado com sucesso!\n🖼️ **URL:** {url}", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro ao atualizar banner: {e}", ephemeral=True)
+
+    @app_commands.command(name="set_cor", description="Altera a cor do tema da loja (Admin)")
+    @app_commands.describe(cor="Escolha entre azul, verde, vermelho, ouro ou roxo")
+    @app_commands.choices(cor=[
+        app_commands.Choice(name="Azul", value="blue"),
+        app_commands.Choice(name="Verde", value="green"),
+        app_commands.Choice(name="Vermelho", value="red"),
+        app_commands.Choice(name="Dourado/Ouro", value="gold"),
+        app_commands.Choice(name="Roxo", value="purple")
+    ])
+    @is_admin()
+    async def set_cor(self, interaction: discord.Interaction, cor: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            supabase.table("store_config").update({"embed_color": cor}).eq("id", 1).execute()
+            await interaction.followup.send(f"✅ Cor do tema da loja alterada para **{cor}**!", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro ao atualizar cor: {e}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Store(bot))
