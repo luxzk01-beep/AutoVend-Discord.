@@ -224,6 +224,7 @@ class CatalogSelectView(discord.ui.View):
         config = config_res.data[0] if config_res.data else {"banner_url": None, "embed_color": "blue"}
         
         color_map = {
+            "black": discord.Color.from_rgb(1, 1, 1),
             "blue": discord.Color.blue(),
             "green": discord.Color.green(),
             "red": discord.Color.red(),
@@ -375,8 +376,9 @@ class Store(commands.Cog):
             await interaction.followup.send(f"❌ Erro ao atualizar banner: {e}", ephemeral=True)
 
     @app_commands.command(name="set_cor", description="Altera a cor do tema da loja (Admin)")
-    @app_commands.describe(cor="Escolha entre azul, verde, vermelho, ouro ou roxo")
+    @app_commands.describe(cor="Escolha a cor do tema")
     @app_commands.choices(cor=[
+        app_commands.Choice(name="Preto", value="black"),
         app_commands.Choice(name="Azul", value="blue"),
         app_commands.Choice(name="Verde", value="green"),
         app_commands.Choice(name="Vermelho", value="red"),
