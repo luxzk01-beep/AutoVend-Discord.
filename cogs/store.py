@@ -24,7 +24,6 @@ PIX_NAME = os.getenv("PIX_NAME", "VENDEDOR")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def remove_accents(text: str) -> str:
-    """Remove acentos e caracteres especiais para o padrão do Pix."""
     nfkd = unicodedata.normalize('NFKD', text)
     return "".join([c for c in nfkd if not unicodedata.combining(c)])
 
@@ -32,11 +31,9 @@ def format_tlv(id_str: str, value: str) -> str:
     return f"{id_str}{len(value):02d}{value}"
 
 def generate_pix_payload(key: str, name: str, city: str, amount: float, identifier: str) -> str:
-    # Limpa acentos e limita tamanhos exigidos pelo BACEN
     name_clean = remove_accents(name)[:25].upper()
     city_clean = remove_accents(city)[:15].upper()
     
-    # TxID precisa ser estritamente alfanumérico (sem espaços ou símbolos)
     identifier_clean = re.sub(r'[^a-zA-Z0-9]', '', remove_accents(identifier))
     identifier_clean = identifier_clean[:25] if identifier_clean else "***"
     
@@ -171,7 +168,7 @@ class OrderControlView(discord.ui.View):
 
         await interaction.response.defer(thinking=True)
         try:
-            supabase.table("orders").update({"status": "aprovado"}).eq("id", self.order_id).execute()
+            supabase.table("orders").update({"status": "aprovado"}`).eq("id", self.order_id).execute()
 
             await interaction.followup.send(f"🎉 **Pagamento Aprovado!** Pedido concluído com sucesso.")
             await interaction.channel.send("Obrigado por comprar conosco! Por favor, avalie sua experiência abaixo:", view=FeedbackView(self.order_id))
@@ -256,15 +253,25 @@ class CatalogView(discord.ui.View):
                 identifier=f"PEDIDO{order['id']}"
             )
 
-            qr = qrcode.make(pix_code)
+            # Geração otimizada do QR Code com margem correta (border=4) para leitura de celulares
+            qr = qrcode.QRCode(
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(pix_code)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+
             buf = io.BytesIO()
-            qr.save(buf, format='PNG')
+            img.save(buf, format='PNG')
             buf.seek(0)
             file = discord.File(buf, filename="pix_qr.png")
 
             pix_embed = discord.Embed(
                 title=f"Pedido #{order['id']} Criado com Sucesso!",
-                description=f"Olá {interaction.user.mention}, efetue o pagamento via Pix.",
+                description=f"Olá {interaction.user.mention}, efetue o pagamento escaneando o QR Code abaixo ou usando a opção **Pix Copia e Cola**.",
                 color=discord.Color.gold()
             )
             pix_embed.add_field(name="Produto", value=product['name'], inline=True)
