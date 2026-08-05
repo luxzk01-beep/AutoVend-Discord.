@@ -67,6 +67,85 @@ def is_admin():
         return False
     return app_commands.check(predicate)
 
+class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
+    comment = discord.ui.TextInput(
+        label="Deixe um comentário (opcional)",
+        style=discord.TextStyle.paragraph,
+        placeholder="O que achou do atendimento e do produto?",
+        required=False,
+        max_length=300
+    )
+
+    def __init__(self, order_id: int, rating: int):
+        super().__init__()
+        self.order_id = order_id
+        self.rating = rating
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            supabase.table("orders").update({
+                "rating": self.rating,
+                "feedback_comment": self.comment.value
+            }).eq("id", self.order_id).execute()
+
+            stars = "⭐" * self.rating
+            await interaction.response.send_message(f"✅ Muito obrigado pelo seu feedback!\nAvaliação: {stars}", ephemeral=True)
+            
+            message = interaction.message
+            if message:
+                await message.edit(view=None)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Erro ao salvar avaliação: {e}", ephemeral=True)
+
+class FeedbackView(discord.ui.View):
+    def __init__(self, order_id: int):
+        super().__init__(timeout=None)
+        self.order_id = order_id
+
+    @discord.ui.button(label="⭐ 1", style=discord.ButtonStyle.secondary)
+    async def star_1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FeedbackModal(self.order_id, 1))
+
+    @discord.ui.button(label="⭐⭐ 2", style=discord.ButtonStyle.secondary)
+    async def star_2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FeedbackModal(self.order_id, 2))
+
+    @discord.ui.button(label="⭐⭐⭐ 3", style=discord.ButtonStyle.primary)
+    async def star_3(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FeedbackModal(self.order_id, 3))
+
+    @discord.ui.button(label="⭐⭐⭐⭐ 4", style=discord.ButtonStyle.primary)
+    async def star_4(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FeedbackModal(self.order_id, 4))
+
+    @discord.ui.button(label="⭐⭐⭐⭐⭐ 5", style=discord.ButtonStyle.success)
+    async def star_5(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FeedbackModal(self.order_id, 5))
+
+class OrderControlView(discord.ui.View):
+    def __init__(self, order_id: int):
+        super().__init__(timeout=None)
+        self.order_id = order_id
+
+    @discord.ui.button(label="✅ Aprovar Pedido", style=discord.ButtonStyle.success, custom_id="approve_order_btn")
+    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator and not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+            await interaction.response.send_message("❌ Apenas administradores podem aprovar pedidos.", ephemeral=True)
+            return
+
+        await interaction.response.defer(thinking=True)
+        try:
+            supabase.table("orders").update({"status": "aprovado"}).eq("id", self.order_id).execute()
+
+            await interaction.followup.send(f"🎉 **Pagamento Aprovado!** Pedido concluído com sucesso.")
+            await interaction.channel.send("Obrigado por comprar conosco! Por favor, avalie sua experiência abaixo:", view=FeedbackView(self.order_id))
+
+            for child in self.children:
+                child.disabled = True
+            await interaction.message.edit(view=self)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro ao aprovar pedido: {e}")
+
 class CatalogView(discord.ui.View):
     def __init__(self, products, index=0):
         super().__init__(timeout=None)
@@ -146,7 +225,7 @@ class CatalogView(discord.ui.View):
 
             pix_embed = discord.Embed(
                 title=f"Pedido #{order['id']} Criado com Sucesso!",
-                description=f"Olá {interaction.user.mention}, efetue o pagamento para concluir a compra.",
+                description=f"Olá {interaction.user.mention}, efetue o pagamento via Pix.",
                 color=discord.Color.gold()
             )
             pix_embed.add_field(name="Produto", value=product['name'], inline=True)
@@ -155,7 +234,9 @@ class CatalogView(discord.ui.View):
             pix_embed.set_image(url="attachment://pix_qr.png")
 
             await interaction.followup.send(f"✅ Pedido criado com sucesso! Veja seu tópico privado: {thread.mention}", ephemeral=True)
-            await thread.send(embed=pix_embed, file=file)
+            
+            control_view = OrderControlView(order['id'])
+            await thread.send(embed=pix_embed, file=file, view=control_view)
         except Exception as e:
             error_msg = traceback.format_exc()
             await interaction.followup.send(f"❌ Erro ao processar compra:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
