@@ -1,5 +1,7 @@
 import os
 import io
+import re
+import unicodedata
 import traceback
 import crcmod
 import qrcode
@@ -21,13 +23,23 @@ PIX_NAME = os.getenv("PIX_NAME", "VENDEDOR")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+def remove_accents(text: str) -> str:
+    """Remove acentos e caracteres especiais para o padrão do Pix."""
+    nfkd = unicodedata.normalize('NFKD', text)
+    return "".join([c for c in nfkd if not unicodedata.combining(c)])
+
 def format_tlv(id_str: str, value: str) -> str:
     return f"{id_str}{len(value):02d}{value}"
 
 def generate_pix_payload(key: str, name: str, city: str, amount: float, identifier: str) -> str:
-    name_clean = name[:25].upper()
-    city_clean = city[:15].upper()
-    identifier_clean = "".join(e for e in identifier if e.isalnum())[:25] or "***"
+    # Limpa acentos e limita tamanhos exigidos pelo BACEN
+    name_clean = remove_accents(name)[:25].upper()
+    city_clean = remove_accents(city)[:15].upper()
+    
+    # TxID precisa ser estritamente alfanumérico (sem espaços ou símbolos)
+    identifier_clean = re.sub(r'[^a-zA-Z0-9]', '', remove_accents(identifier))
+    identifier_clean = identifier_clean[:25] if identifier_clean else "***"
+    
     amount_str = f"{amount:.2f}"
 
     gui = format_tlv("00", "br.gov.bcb.pix")
@@ -227,18 +239,21 @@ class CatalogView(discord.ui.View):
             order = res.data[0]
 
             thread = await interaction.channel.create_thread(
-                name=f"pedido-{order['id']}-{interaction.user.name}",
+                name=f"pedido-{order['id']}-{interaction.user.name[:10]}",
                 type=discord.ChannelType.private_thread,
                 auto_archive_duration=1440
             )
-            await thread.add_user(interaction.user)
+            try:
+                await thread.add_user(interaction.user)
+            except Exception:
+                pass
 
             pix_code = generate_pix_payload(
                 key=PIX_KEY,
                 name=PIX_NAME,
                 city=PIX_CITY,
-                amount=product['price'],
-                identifier=interaction.user.name
+                amount=float(product['price']),
+                identifier=f"PEDIDO{order['id']}"
             )
 
             qr = qrcode.make(pix_code)
@@ -313,4 +328,4 @@ class Store(commands.Cog):
             await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
 
 async def setup(bot):
-    await bot.add_cog(Store(bot))
+    await bot.add_configs(Store(bot)) if hasattr(bot, 'add_configs') else await bot.add_cog(Store(bot))
