@@ -168,7 +168,7 @@ class OrderControlView(discord.ui.View):
 
         await interaction.response.defer(thinking=True)
         try:
-            supabase.table("orders").update({"status": "aprovado"}`).eq("id", self.order_id).execute()
+            supabase.table("orders").update({"status": "aprovado"}).eq("id", self.order_id).execute()
 
             await interaction.followup.send(f"🎉 **Pagamento Aprovado!** Pedido concluído com sucesso.")
             await interaction.channel.send("Obrigado por comprar conosco! Por favor, avalie sua experiência abaixo:", view=FeedbackView(self.order_id))
@@ -253,7 +253,6 @@ class CatalogView(discord.ui.View):
                 identifier=f"PEDIDO{order['id']}"
             )
 
-            # Geração otimizada do QR Code com margem correta (border=4) para leitura de celulares
             qr = qrcode.QRCode(
                 version=None,
                 error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -335,4 +334,4 @@ class Store(commands.Cog):
             await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
 
 async def setup(bot):
-    await bot.add_configs(Store(bot)) if hasattr(bot, 'add_configs') else await bot.add_cog(Store(bot))
+    await bot.add_cog(Store(bot))
