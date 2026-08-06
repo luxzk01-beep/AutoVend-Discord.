@@ -115,9 +115,15 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
                     embed.add_field(name="Comentário", value=f"_{self.comment.value}_", inline=False)
                 embed.set_footer(text=f"Pedido ID: #{order['id']}")
 
+                # Procura automaticamente por qualquer uma das variações do canal de feedbacks
                 target_channel = discord.utils.get(interaction.guild.text_channels, name="vouchers")
                 if not target_channel:
                     target_channel = discord.utils.get(interaction.guild.text_channels, name="avaliacoes")
+                if not target_channel:
+                    target_channel = discord.utils.get(interaction.guild.text_channels, name="feedbacks")
+                if not target_channel:
+                    # Busca caso contenha "feedbacks" no nome do canal (ex: com emojis/traços convertidos pelo discord)
+                    target_channel = discord.utils.find(lambda c: "feedbacks" in c.name, interaction.guild.text_channels)
                 
                 if target_channel:
                     await target_channel.send(embed=embed)
@@ -191,6 +197,8 @@ class OrderControlView(discord.ui.View):
                         await interaction.channel.send(embed=delivery_embed)
 
             await interaction.followup.send(f"🎉 **Pagamento Aprovado!** Pedido concluído com sucesso.")
+            
+            # Envia a mensagem de feedback apenas no tópico para o cliente clicar nas estrelas
             await interaction.channel.send("Obrigado por comprar conosco! Por favor, avalie sua experiência abaixo:", view=FeedbackView(self.order_id))
 
             for child in self.children:
