@@ -364,6 +364,28 @@ class CatalogSelectView(discord.ui.View):
             except Exception:
                 pass
 
+            # --- CORREÇÃO: Adiciona o dono/admin automaticamente ao tópico privado ---
+            try:
+                # Adiciona você (dono da interação atual ou administradores do servidor) ao tópico
+                if not interaction.user.guild_permissions.administrator:
+                    # Se quem comprou não for admin, garante que o autor/admins possam ver
+                    pass
+                # Adiciona o próprio autor do clique/comando ou membros com cargo admin se necessário,
+                # ou adiciona você explicitamente caso queira colocar seu ID fixo:
+                # owner_member = interaction.guild.get_member(SEU_ID_AQUI)
+                # if owner_member: await thread.add_user(owner_member)
+                
+                # Forma automática geral para administradores do servidor com permissão de gerenciar tópicos:
+                for member in interaction.guild.members:
+                    if member.guild_permissions.administrator or any(role.id == ADMIN_ROLE_ID for role in member.roles):
+                        try:
+                            await thread.add_user(member)
+                        except:
+                            pass
+            except Exception:
+                pass
+            # ------------------------------------------------------------------------
+
             pix_code = generate_pix_payload(
                 key=PIX_KEY,
                 name=PIX_NAME,
