@@ -115,15 +115,14 @@ class FeedbackModal(discord.ui.Modal, title="Avalie sua Compra"):
                     embed.add_field(name="Comentário", value=f"_{self.comment.value}_", inline=False)
                 embed.set_footer(text=f"Pedido ID: #{order['id']}")
 
-                # Procura automaticamente por qualquer uma das variações do canal de feedbacks
+                # Procura automaticamente pelo canal de feedbacks considerando variações de nome/emojis
                 target_channel = discord.utils.get(interaction.guild.text_channels, name="vouchers")
                 if not target_channel:
                     target_channel = discord.utils.get(interaction.guild.text_channels, name="avaliacoes")
                 if not target_channel:
                     target_channel = discord.utils.get(interaction.guild.text_channels, name="feedbacks")
                 if not target_channel:
-                    # Busca caso contenha "feedbacks" no nome do canal (ex: com emojis/traços convertidos pelo discord)
-                    target_channel = discord.utils.find(lambda c: "feedbacks" in c.name, interaction.guild.text_channels)
+                    target_channel = discord.utils.find(lambda c: "feedbacks" in c.name or "avaliac" in c.name or "vouchers" in c.name, interaction.guild.text_channels)
                 
                 if target_channel:
                     await target_channel.send(embed=embed)
@@ -198,7 +197,6 @@ class OrderControlView(discord.ui.View):
 
             await interaction.followup.send(f"🎉 **Pagamento Aprovado!** Pedido concluído com sucesso.")
             
-            # Envia a mensagem de feedback apenas no tópico para o cliente clicar nas estrelas
             await interaction.channel.send("Obrigado por comprar conosco! Por favor, avalie sua experiência abaixo:", view=FeedbackView(self.order_id))
 
             for child in self.children:
@@ -441,6 +439,14 @@ class CatalogSelectView(discord.ui.View):
 class Store(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    # Sincroniza automaticamente os slash commands assim que o cog carregar
+    async def cog_load(self):
+        try:
+            synced = await self.bot.tree.sync()
+            print(f"[Store] Comandos sincronizados com sucesso: {len(synced)} comandos.")
+        except Exception as e:
+            print(f"[Store] Erro ao sincronizar comandos: {e}")
 
     @app_commands.command(name="loja_streaming", description="Envia o catálogo de Streaming (Admin)")
     @is_admin()
