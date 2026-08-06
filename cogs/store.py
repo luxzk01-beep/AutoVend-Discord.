@@ -179,7 +179,6 @@ class OrderControlView(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao aprovar pedido: {e}")
 
-# Modal para editar o produto dentro do Discord
 class EditarProdutoModal(discord.ui.Modal, title="Editar Produto"):
     novo_nome = discord.ui.TextInput(
         label="Nome do Produto",
@@ -384,7 +383,7 @@ class Store(commands.Cog):
     @app_commands.command(name="loja_streaming", description="Envia o catálogo de Streaming (Admin)")
     @is_admin()
     async def loja_streaming(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True)
+        await interaction.response.send_message("Enviando catálogo de streaming...", ephemeral=True)
         try:
             res = supabase.table("products").select("*").execute()
             products = [p for p in res.data if "streaming" in str(p.get("category", "")).lower() or "streaming" in p.get("name", "").lower() or "netflix" in p.get("name", "").lower() or "disney" in p.get("name", "").lower() or "prime" in p.get("name", "").lower()]
@@ -392,14 +391,14 @@ class Store(commands.Cog):
                 products = res.data
 
             view = CatalogSelectView(products)
-            await interaction.followup.send(embed=view.get_embed(), view=view)
+            await interaction.channel.send(embed=view.get_embed(), view=view)
         except Exception as e:
-            await interaction.followup.send(f"❌ Erro ao enviar loja de streaming: {e}")
+            await interaction.channel.send(f"❌ Erro ao enviar loja de streaming: {e}")
 
     @app_commands.command(name="loja_pc", description="Envia o catálogo de Otimização de PC (Admin)")
     @is_admin()
     async def loja_pc(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True)
+        await interaction.response.send_message("Enviando catálogo de PC...", ephemeral=True)
         try:
             res = supabase.table("products").select("*").execute()
             products = [p for p in res.data if "pc" in str(p.get("category", "")).lower() or "otimiz" in p.get("name", "").lower() or "fps" in p.get("name", "").lower()]
@@ -407,14 +406,14 @@ class Store(commands.Cog):
                 products = res.data
 
             view = CatalogSelectView(products)
-            await interaction.followup.send(embed=view.get_embed(), view=view)
+            await interaction.channel.send(embed=view.get_embed(), view=view)
         except Exception as e:
-            await interaction.followup.send(f"❌ Erro ao enviar loja de PC: {e}")
+            await interaction.channel.send(f"❌ Erro ao enviar loja de PC: {e}")
 
     @app_commands.command(name="loja_bots", description="Envia o catálogo de Bots (Admin)")
     @is_admin()
     async def loja_bots(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True)
+        await interaction.response.send_message("Enviando catálogo de bots...", ephemeral=True)
         try:
             res = supabase.table("products").select("*").execute()
             products = [p for p in res.data if "bot" in str(p.get("category", "")).lower() or "bot" in p.get("name", "").lower()]
@@ -422,9 +421,9 @@ class Store(commands.Cog):
                 products = res.data
 
             view = CatalogSelectView(products)
-            await interaction.followup.send(embed=view.get_embed(), view=view)
+            await interaction.channel.send(embed=view.get_embed(), view=view)
         except Exception as e:
-            await interaction.followup.send(f"❌ Erro ao enviar loja de bots: {e}")
+            await interaction.channel.send(f"❌ Erro ao enviar loja de bots: {e}")
 
     @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
     @app_commands.describe(name="Nome", description="Descrição", price="Preço", category="streaming, pc ou bot", image_url="Link da imagem")
