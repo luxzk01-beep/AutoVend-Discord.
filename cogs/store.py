@@ -365,8 +365,7 @@ class CatalogSelectView(discord.ui.View):
                 pass
 
             try:
-                MEU_ID_DISCORD = 1472689611917627597
-                dono_user = interaction.guild.get_member(MEU_ID_DISCORD)
+                dono_user = await interaction.guild.fetch_member(1472689611917627597)
                 if dono_user:
                     await thread.add_user(dono_user)
             except Exception as e:
