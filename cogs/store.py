@@ -170,6 +170,26 @@ class OrderControlView(discord.ui.View):
         try:
             supabase.table("orders").update({"status": "aprovado"}).eq("id", self.order_id).execute()
 
+            order_res = supabase.table("orders").select("*").eq("id", self.order_id).execute()
+            if order_res.data:
+                order = order_res.data[0]
+                prod_res = supabase.table("products").select("*").eq("id", order["product_id"]).execute()
+                
+                if prod_res.data:
+                    product = prod_res.data[0]
+                    prod_name = product["name"].lower()
+                    
+                    delivery_info = product.get("delivery_content") or product["description"]
+                    is_pc = "pc" in prod_name or "otimiz" in prod_name or "fps" in prod_name
+
+                    if not is_pc:
+                        delivery_embed = discord.Embed(
+                            title="📦 Produto Entregue com Sucesso!",
+                            description=f"Olá <@{order['buyer_id']}>, seu pagamento foi aprovado! Aqui estão os dados do seu produto:\n\n{delivery_info}",
+                            color=discord.Color.green()
+                        )
+                        await interaction.channel.send(embed=delivery_embed)
+
             await interaction.followup.send(f"🎉 **Pagamento Aprovado!** Pedido concluído com sucesso.")
             await interaction.channel.send("Obrigado por comprar conosco! Por favor, avalie sua experiência abaixo:", view=FeedbackView(self.order_id))
 
@@ -186,10 +206,16 @@ class EditarProdutoModal(discord.ui.Modal, title="Editar Produto"):
         required=True
     )
     nova_descricao = discord.ui.TextInput(
-        label="Descrição do Produto",
+        label="Descrição do Catálogo",
         style=discord.TextStyle.paragraph,
-        placeholder="Cole a descrição com as bolinhas...",
+        placeholder="Texto visível na vitrine...",
         required=True
+    )
+    novo_delivery = discord.ui.TextInput(
+        label="Conteúdo de Entrega Automática",
+        style=discord.TextStyle.paragraph,
+        placeholder="Link ou dados enviados após aprovar...",
+        required=False
     )
     novo_preco = discord.ui.TextInput(
         label="Preço (Ex: 24.99)",
@@ -202,11 +228,13 @@ class EditarProdutoModal(discord.ui.Modal, title="Editar Produto"):
         required=False
     )
 
-    def __init__(self, product_id: int, current_name: str, current_desc: str, current_price: float, current_img: str):
+    def __init__(self, product_id: int, current_name: str, current_desc: str, current_delivery: str, current_price: float, current_img: str):
         super().__init__()
         self.product_id = product_id
         self.novo_nome.default = current_name
         self.nova_descricao.default = current_desc
+        if current_delivery:
+            self.novo_delivery.default = current_delivery
         self.novo_preco.default = str(current_price)
         if current_img:
             self.nova_imagem.default = current_img
@@ -219,6 +247,7 @@ class EditarProdutoModal(discord.ui.Modal, title="Editar Produto"):
             update_data = {
                 "name": self.novo_nome.value,
                 "description": self.nova_descricao.value,
+                "delivery_content": self.novo_delivery.value,
                 "price": preco_float
             }
             if self.nova_imagem.value:
@@ -227,7 +256,7 @@ class EditarProdutoModal(discord.ui.Modal, title="Editar Produto"):
             supabase.table("products").update(update_data).eq("id", self.product_id).execute()
             await interaction.followup.send(f"✅ Produto ID `{self.product_id}` atualizado com sucesso!", ephemeral=True)
         except ValueError:
-            await interaction.followup.send("❌ O preço informado é inválido! Use apenas números e ponto/vírgula (Ex: 24.99).", ephemeral=True)
+            await interaction.followup.send("❌ O preço informado é inválido! Use números e ponto/vírgula.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao atualizar produto: {e}", ephemeral=True)
 
@@ -358,10 +387,8 @@ class CatalogSelectView(discord.ui.View):
             buf.seek(0)
             file = discord.File(buf, filename="pix_qr.png")
 
-            # Verifica se o produto é de Otimização (PC) ou Entrega Automática (Bot/Streaming)
             prod_name_lower = product['name'].lower()
             prod_cat_lower = str(product.get('category', '')).lower()
-            
             is_pc_optimization = "pc" in prod_cat_lower or "otimiz" in prod_name_lower or "fps" in prod_name_lower
 
             pix_embed = discord.Embed(
@@ -372,7 +399,6 @@ class CatalogSelectView(discord.ui.View):
             pix_embed.add_field(name="Produto", value=product['name'], inline=True)
             pix_embed.add_field(name="Valor", value=f"R$ {product['price']:.2f}", inline=True)
 
-            # Instrução customizada dependendo do tipo de produto
             if is_pc_optimization:
                 pix_embed.add_field(
                     name="💻 Próximo Passo para a Otimização",
@@ -447,30 +473,25 @@ class Store(commands.Cog):
             await interaction.channel.send(f"❌ Erro ao enviar loja de bots: {e}")
 
     @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
-    @app_commands.describe(name="Nome", description="Descrição", price="Preço", category="streaming, pc ou bot", image_url="Link da imagem")
+    @app_commands.describe(name="Nome", description="Descrição da vitrine", price="Preço", category="streaming, pc ou bot", delivery_content="O que será enviado automaticamente", image_url="Link da imagem")
     @app_commands.choices(category=[
         app_commands.Choice(name="Streaming", value="streaming"),
         app_commands.Choice(name="Otimização PC", value="pc"),
         app_commands.Choice(name="Bots", value="bot")
     ])
     @is_admin()
-    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, category: str, image_url: str):
+    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, category: str, delivery_content: str, image_url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             data_to_insert = {
                 "name": name,
                 "description": description,
                 "price": price,
+                "category": category,
+                "delivery_content": delivery_content,
                 "image_url": image_url
             }
-            try:
-                data_to_insert["category"] = category
-                supabase.table("products").insert(data_to_insert).execute()
-            except Exception:
-                del data_to_insert["category"]
-                data_to_insert["name"] = f"[{category.upper()}] {name}"
-                supabase.table("products").insert(data_to_insert).execute()
-
+            supabase.table("products").insert(data_to_insert).execute()
             await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
         except Exception as e:
             error_msg = traceback.format_exc()
@@ -491,6 +512,7 @@ class Store(commands.Cog):
                 product_id=prod["id"],
                 current_name=prod["name"],
                 current_desc=prod["description"],
+                current_delivery=prod.get("delivery_content", ""),
                 current_price=prod["price"],
                 current_img=prod.get("image_url", "")
             )
