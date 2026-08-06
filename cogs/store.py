@@ -179,6 +179,59 @@ class OrderControlView(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao aprovar pedido: {e}")
 
+# Modal para editar o produto dentro do Discord
+class EditarProdutoModal(discord.ui.Modal, title="Editar Produto"):
+    novo_nome = discord.ui.TextInput(
+        label="Nome do Produto",
+        placeholder="Digite o novo nome...",
+        required=True
+    )
+    nova_descricao = discord.ui.TextInput(
+        label="Descrição do Produto",
+        style=discord.TextStyle.paragraph,
+        placeholder="Cole a descrição com as bolinhas...",
+        required=True
+    )
+    novo_preco = discord.ui.TextInput(
+        label="Preço (Ex: 24.99)",
+        placeholder="24.99",
+        required=True
+    )
+    nova_imagem = discord.ui.TextInput(
+        label="Link da Imagem (URL)",
+        placeholder="https://...",
+        required=False
+    )
+
+    def __init__(self, product_id: int, current_name: str, current_desc: str, current_price: float, current_img: str):
+        super().__init__()
+        self.product_id = product_id
+        self.novo_nome.default = current_name
+        self.nova_descricao.default = current_desc
+        self.novo_preco.default = str(current_price)
+        if current_img:
+            self.nova_imagem.default = current_img
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            preco_float = float(self.novo_preco.value.replace(",", "."))
+            
+            update_data = {
+                "name": self.novo_nome.value,
+                "description": self.nova_descricao.value,
+                "price": preco_float
+            }
+            if self.nova_imagem.value:
+                update_data["image_url"] = self.nova_imagem.value
+
+            supabase.table("products").update(update_data).eq("id", self.product_id).execute()
+            await interaction.followup.send(f"✅ Produto ID `{self.product_id}` atualizado com sucesso!", ephemeral=True)
+        except ValueError:
+            await interaction.followup.send("❌ O preço informado é inválido! Use apenas números e ponto/vírgula (Ex: 24.99).", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro ao atualizar produto: {e}", ephemeral=True)
+
 class ProductSelect(discord.ui.Select):
     def __init__(self, products):
         self.products = products
@@ -334,10 +387,9 @@ class Store(commands.Cog):
         await interaction.response.defer(thinking=True)
         try:
             res = supabase.table("products").select("*").execute()
-            # Filtra por produtos que tenham 'streaming' no nome ou na categoria (caso exista)
             products = [p for p in res.data if "streaming" in str(p.get("category", "")).lower() or "streaming" in p.get("name", "").lower() or "netflix" in p.get("name", "").lower() or "disney" in p.get("name", "").lower() or "prime" in p.get("name", "").lower()]
             if not products:
-                products = res.data # Fallback se não achar filtro exato
+                products = res.data
 
             view = CatalogSelectView(products)
             await interaction.followup.send(embed=view.get_embed(), view=view)
@@ -385,7 +437,6 @@ class Store(commands.Cog):
     async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, category: str, image_url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
-            # Tenta salvar com a categoria. Se a coluna não existir no banco, salva sem ela para evitar crash.
             data_to_insert = {
                 "name": name,
                 "description": description,
@@ -396,9 +447,7 @@ class Store(commands.Cog):
                 data_to_insert["category"] = category
                 supabase.table("products").insert(data_to_insert).execute()
             except Exception:
-                # Remove a categoria e insere apenas os campos padrão se a coluna não existir
                 del data_to_insert["category"]
-                # Adiciona a categoria dentro do próprio nome ou descrição para o filtro funcionar
                 data_to_insert["name"] = f"[{category.upper()}] {name}"
                 supabase.table("products").insert(data_to_insert).execute()
 
@@ -406,6 +455,28 @@ class Store(commands.Cog):
         except Exception as e:
             error_msg = traceback.format_exc()
             await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
+
+    @app_commands.command(name="editar_produto", description="Edita um produto existente informando o ID (Admin)")
+    @app_commands.describe(product_id="O ID numérico do produto que deseja editar")
+    @is_admin()
+    async def editar_produto(self, interaction: discord.Interaction, product_id: int):
+        try:
+            res = supabase.table("products").select("*").eq("id", product_id).execute()
+            if not res.data:
+                await interaction.response.send_message(f"❌ Nenhum produto encontrado com o ID `{product_id}`.", ephemeral=True)
+                return
+
+            prod = res.data[0]
+            modal = EditarProdutoModal(
+                product_id=prod["id"],
+                current_name=prod["name"],
+                current_desc=prod["description"],
+                current_price=prod["price"],
+                current_img=prod.get("image_url", "")
+            )
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Erro ao carregar produto para edição: {e}", ephemeral=True)
 
     @app_commands.command(name="set_banner", description="Altera o banner principal da loja (Admin)")
     @app_commands.describe(url="Link direto da imagem do banner")
@@ -433,7 +504,7 @@ class Store(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             supabase.table("store_config").update({"embed_color": cor}).eq("id", 1).execute()
-            await interaction.followup.save(f"✅ Cor do tema alterada para **{cor}**!", ephemeral=True)
+            await interaction.followup.send(f"✅ Cor do tema alterada para **{cor}**!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao atualizar cor: {e}", ephemeral=True)
 
