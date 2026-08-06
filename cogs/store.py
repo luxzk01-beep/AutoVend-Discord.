@@ -204,12 +204,11 @@ class OrderControlView(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao aprovar pedido: {e}")
 
-# --- SISTEMA DE TICKETS ADICIONADO ---
 class TicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Abrir Ticket de Suporte 🎫", style=discord.ButtonStyle.blurple, custom_id="ticket_support_btn")
+    @discord.ui.button(label="Abrir Ticket de Suporte", style=discord.ButtonStyle.success, emoji="🎫", custom_id="ticket_support_btn")
     async def ticket_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             thread = await interaction.channel.create_thread(
@@ -232,8 +231,8 @@ class TicketView(discord.ui.View):
 
             embed = discord.Embed(
                 title="🎫 Ticket de Suporte Aberto",
-                description=f"Olá {interaction.user.mention}, descreva sua dúvida ou problema. Nossa equipe responderá em breve!",
-                color=discord.Color.blue()
+                description=f"Olá {interaction.user.mention}, descreva sua dúvida ou problema detalhadamente. Nossa equipe responderá em breve!",
+                color=discord.Color.green()
             )
             await thread.send(embed=embed)
             await interaction.response.send_message(f"✅ Ticket aberto com sucesso: {thread.mention}", ephemeral=True)
@@ -482,17 +481,67 @@ class Store(commands.Cog):
         except Exception as e:
             print(f"[Store] Erro ao sincronizar comandos: {e}")
 
-    # --- NOVO COMANDO DE SUPORTE ---
-    @app_commands.command(name="painel_suporte", description="Envia o painel de tickets de suporte (Admin)")
+    @app_commands.command(name="painel_suporte", description="Envia o painel profissional de tickets de suporte (Admin)")
     @is_admin()
     async def painel_suporte(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="❓ Precisa de Ajuda?",
-            description="Clique no botão abaixo para abrir um ticket privado de suporte com nossa equipe.",
-            color=discord.Color.blue()
-        )
-        await interaction.channel.send(embed=embed, view=TicketView())
-        await interaction.response.send_message("✅ Painel de suporte enviado com sucesso!", ephemeral=True)
+        await interaction.response.send_message("Enviando painel de suporte...", ephemeral=True)
+        try:
+            config_res = supabase.table("store_config").select("*").eq("id", 1).execute()
+            config = config_res.data[0] if config_res.data else {"banner_url": None, "embed_color": "black"}
+            
+            color_map = {
+                "black": discord.Color.from_rgb(1, 1, 1),
+                "blue": discord.Color.blue(),
+                "green": discord.Color.green(),
+                "red": discord.Color.red(),
+                "gold": discord.Color.gold(),
+                "purple": discord.Color.purple()
+            }
+            embed_color = color_map.get(config.get("embed_color", "black"), discord.Color.blue())
+
+            embed = discord.Embed(
+                title="🎫 Central de Atendimento & Suporte",
+                description=(
+                    "Está com dúvidas, encontrou algum problema ou precisa de ajuda com seu pedido?\n\n"
+                    "• Clique no botão verde abaixo para iniciar um **atendimento privado**.\n"
+                    "• Nossa equipe será notificada imediatamente.\n\n"
+                    "> *Evite abrir tickets sem necessidade.*"
+                ),
+                color=embed_color
+            )
+            
+            img_url = config.get('banner_url')
+            if img_url and isinstance(img_url, str) and img_url.startswith("http"):
+                try:
+                    embed.set_image(url=img_url)
+                except Exception:
+                    pass
+
+            embed.set_footer(text="Sistema de Suporte Automatizado", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+
+            await interaction.channel.send(embed=embed, view=TicketView())
+        except Exception as e:
+            await interaction.channel.send(f"❌ Erro ao enviar painel de suporte: {e}")
+
+    @app_commands.command(name="editar_painel", description="Edita o título e descrição do painel de suporte mais recente")
+    @app_commands.describe(novo_titulo="O novo título do painel", nova_descricao="A nova descrição (use \\n para quebrar linhas)")
+    @is_admin()
+    async def editar_painel(self, interaction: discord.Interaction, novo_titulo: str, nova_descricao: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            async for message in interaction.channel.history(limit=10):
+                if message.author == self.bot.user and message.embeds:
+                    embed = message.embeds[0]
+                    embed.title = novo_titulo
+                    embed.description = nova_descricao.replace("\\n", "\n")
+                    
+                    await message.edit(embed=embed)
+                    await interaction.followup.send("✅ Painel editado com sucesso!", ephemeral=True)
+                    return
+            
+            await interaction.followup.send("❌ Não encontrei nenhum painel (embed) enviado por mim neste canal.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro ao editar: {e}", ephemeral=True)
 
     @app_commands.command(name="loja_streaming", description="Envia o catálogo de Streaming (Admin)")
     @is_admin()
