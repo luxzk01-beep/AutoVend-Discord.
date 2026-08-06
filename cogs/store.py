@@ -358,6 +358,12 @@ class CatalogSelectView(discord.ui.View):
             buf.seek(0)
             file = discord.File(buf, filename="pix_qr.png")
 
+            # Verifica se o produto é de Otimização (PC) ou Entrega Automática (Bot/Streaming)
+            prod_name_lower = product['name'].lower()
+            prod_cat_lower = str(product.get('category', '')).lower()
+            
+            is_pc_optimization = "pc" in prod_cat_lower or "otimiz" in prod_name_lower or "fps" in prod_name_lower
+
             pix_embed = discord.Embed(
                 title=f"Pedido #{order['id']} Criado com Sucesso!",
                 description=f"Olá {interaction.user.mention}, efetue o pagamento escaneando o QR Code abaixo ou usando a opção **Pix Copia e Cola**.",
@@ -365,6 +371,21 @@ class CatalogSelectView(discord.ui.View):
             )
             pix_embed.add_field(name="Produto", value=product['name'], inline=True)
             pix_embed.add_field(name="Valor", value=f"R$ {product['price']:.2f}", inline=True)
+
+            # Instrução customizada dependendo do tipo de produto
+            if is_pc_optimization:
+                pix_embed.add_field(
+                    name="💻 Próximo Passo para a Otimização",
+                    value="Assim que realizar o pagamento e enviar o comprovante aqui, mande o seu **código do AnyDesk** para iniciarmos o procedimento!",
+                    inline=False
+                )
+            else:
+                pix_embed.add_field(
+                    name="🤖 Entrega Automática",
+                    value="Assim que o pagamento for aprovado, os dados/acessos do produto serão entregues automaticamente aqui no seu tópico!",
+                    inline=False
+                )
+
             pix_embed.add_field(name="Chave PIX (Copia e Cola)", value=f"```{pix_code}```", inline=False)
             pix_embed.set_image(url="attachment://pix_qr.png")
 
