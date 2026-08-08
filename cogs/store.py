@@ -181,18 +181,15 @@ class OrderControlView(discord.ui.View):
                 
                 if prod_res.data:
                     product = prod_res.data[0]
-                    prod_name = product["name"].lower()
-                    
                     delivery_info = product.get("delivery_content") or product["description"]
-                    is_pc = "pc" in prod_name or "otimiz" in prod_name or "fps" in prod_name or product.get("category") == "pc"
-
-                    if not is_pc:
-                        delivery_embed = discord.Embed(
-                            title="📦 Produto Entregue com Sucesso!",
-                            description=f"Olá <@{order['buyer_id']}>, seu pagamento foi aprovado! Aqui estão os dados do seu produto:\n\n{delivery_info}",
-                            color=discord.Color.green()
-                        )
-                        await interaction.channel.send(embed=delivery_embed)
+                    
+                    # Envia a mensagem de entrega para qualquer produto (inclusive PC/Otimização)
+                    delivery_embed = discord.Embed(
+                        title="📦 Produto / Instruções Entregues!",
+                        description=f"Olá <@{order['buyer_id']}>, seu pagamento foi aprovado! Seguem as informações:\n\n{delivery_info}",
+                        color=discord.Color.green()
+                    )
+                    await interaction.channel.send(embed=delivery_embed)
 
             await interaction.followup.send("🎉 **Pagamento Aprovado!** Pedido concluído com sucesso.")
             
