@@ -435,8 +435,7 @@ class CatalogSelectView(discord.ui.View):
             file = discord.File(buf, filename="pix_qr.png")
 
             prod_name_lower = product['name'].lower()
-            prod_cat_lower = str(product.get('category', '')).lower()
-            is_pc_optimization = "pc" in prod_cat_lower or "otimiz" in prod_name_lower or "fps" in prod_name_lower
+            is_pc_optimization = "pc" in prod_name_lower or "otimiz" in prod_name_lower or "fps" in prod_name_lower
 
             pix_embed = discord.Embed(
                 title=f"Pedido #{order['id']} Criado com Sucesso!",
@@ -549,7 +548,7 @@ class Store(commands.Cog):
         await interaction.response.send_message("Enviando catálogo de streaming...", ephemeral=True)
         try:
             res = supabase.table("products").select("*").execute()
-            products = [p for p in res.data if "streaming" in str(p.get("category", "")).lower() or "streaming" in p.get("name", "").lower() or "netflix" in p.get("name", "").lower() or "disney" in p.get("name", "").lower() or "prime" in p.get("name", "").lower()]
+            products = [p for p in res.data if "streaming" in p.get("name", "").lower() or "netflix" in p.get("name", "").lower() or "disney" in p.get("name", "").lower() or "prime" in p.get("name", "").lower()]
             if not products:
                 products = res.data
 
@@ -564,7 +563,7 @@ class Store(commands.Cog):
         await interaction.response.send_message("Enviando catálogo de PC...", ephemeral=True)
         try:
             res = supabase.table("products").select("*").execute()
-            products = [p for p in res.data if "pc" in str(p.get("category", "")).lower() or "otimiz" in p.get("name", "").lower() or "fps" in p.get("name", "").lower()]
+            products = [p for p in res.data if "otimiz" in p.get("name", "").lower() or "fps" in p.get("name", "").lower() or "pc" in p.get("name", "").lower()]
             if not products:
                 products = res.data
 
@@ -579,7 +578,7 @@ class Store(commands.Cog):
         await interaction.response.send_message("Enviando catálogo de bots...", ephemeral=True)
         try:
             res = supabase.table("products").select("*").execute()
-            products = [p for p in res.data if "bot" in str(p.get("category", "")).lower() or "bot" in p.get("name", "").lower()]
+            products = [p for p in res.data if "bot" in p.get("name", "").lower()]
             if not products:
                 products = res.data
 
@@ -589,21 +588,15 @@ class Store(commands.Cog):
             await interaction.channel.send(f"❌ Erro ao enviar loja de bots: {e}")
 
     @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
-    @app_commands.describe(name="Nome", description="Descrição da vitrine", price="Preço", category="streaming, pc ou bot", delivery_content="O que será enviado automaticamente", image_url="Link da imagem")
-    @app_commands.choices(category=[
-        app_commands.Choice(name="Streaming", value="streaming"),
-        app_commands.Choice(name="Otimização PC", value="pc"),
-        app_commands.Choice(name="Bots", value="bot")
-    ])
+    @app_commands.describe(name="Nome", description="Descrição da vitrine", price="Preço", delivery_content="O que será enviado automaticamente", image_url="Link da imagem")
     @is_admin()
-    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, category: str, delivery_content: str, image_url: str):
+    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, delivery_content: str, image_url: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             data_to_insert = {
                 "name": name,
                 "description": description,
                 "price": price,
-                "category": category,
                 "delivery_content": delivery_content,
                 "image_url": image_url
             }
