@@ -184,7 +184,7 @@ class OrderControlView(discord.ui.View):
                     prod_name = product["name"].lower()
                     
                     delivery_info = product.get("delivery_content") or product["description"]
-                    is_pc = "pc" in prod_name or "otimiz" in prod_name or "fps" in prod_name
+                    is_pc = "pc" in prod_name or "otimiz" in prod_name or "fps" in prod_name or product.get("category") == "pc"
 
                     if not is_pc:
                         delivery_embed = discord.Embed(
@@ -339,7 +339,7 @@ class CatalogSelectView(discord.ui.View):
 
     def get_embed(self):
         if not self.products:
-            return discord.Embed(title="Loja Vazia", description="Não há produtos cadastrados.", color=discord.Color.red())
+            return discord.Embed(title="Loja Vazia", description="Não há produtos cadastrados nesta categoria.", color=discord.Color.red())
         
         config_res = supabase.table("store_config").select("*").eq("id", 1).execute()
         config = config_res.data[0] if config_res.data else {"banner_url": None, "embed_color": "black"}
@@ -435,7 +435,7 @@ class CatalogSelectView(discord.ui.View):
             file = discord.File(buf, filename="pix_qr.png")
 
             prod_name_lower = product['name'].lower()
-            is_pc_optimization = "pc" in prod_name_lower or "otimiz" in prod_name_lower or "fps" in prod_name_lower
+            is_pc_optimization = "pc" in prod_name_lower or "otimiz" in prod_name_lower or "fps" in prod_name_lower or product.get("category") == "pc"
 
             pix_embed = discord.Embed(
                 title=f"Pedido #{order['id']} Criado com Sucesso!",
@@ -467,197 +467,4 @@ class CatalogSelectView(discord.ui.View):
             await thread.send(embed=pix_embed, file=file, view=control_view)
         except Exception as e:
             error_msg = traceback.format_exc()
-            await interaction.followup.send(f"❌ Erro ao processar compra:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
-
-class Store(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    async def cog_load(self):
-        try:
-            synced = await self.bot.tree.sync()
-            print(f"[Store] Comandos sincronizados com sucesso: {len(synced)} comandos.")
-        except Exception as e:
-            print(f"[Store] Erro ao sincronizar comandos: {e}")
-
-    @app_commands.command(name="painel_suporte", description="Envia o painel profissional de tickets de suporte (Admin)")
-    @is_admin()
-    async def painel_suporte(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Enviando painel de suporte...", ephemeral=True)
-        try:
-            config_res = supabase.table("store_config").select("*").eq("id", 1).execute()
-            config = config_res.data[0] if config_res.data else {"banner_url": None, "embed_color": "black"}
-            
-            color_map = {
-                "black": discord.Color.from_rgb(1, 1, 1),
-                "blue": discord.Color.blue(),
-                "green": discord.Color.green(),
-                "red": discord.Color.red(),
-                "gold": discord.Color.gold(),
-                "purple": discord.Color.purple()
-            }
-            embed_color = color_map.get(config.get("embed_color", "black"), discord.Color.blue())
-
-            embed = discord.Embed(
-                title="🎫 Central de Atendimento & Suporte",
-                description=(
-                    "Está com dúvidas, encontrou algum problema ou precisa de ajuda com seu pedido?\n\n"
-                    "• Clique no botão verde abaixo para iniciar um **atendimento privado**.\n"
-                    "• Nossa equipe será notificada imediatamente.\n\n"
-                    "> *Evite abrir tickets sem necessidade.*"
-                ),
-                color=embed_color
-            )
-            
-            img_url = config.get('banner_url')
-            if img_url and isinstance(img_url, str) and img_url.startswith("http"):
-                try:
-                    embed.set_image(url=img_url)
-                except Exception:
-                    pass
-
-            embed.set_footer(text="Sistema de Suporte Automatizado", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
-
-            await interaction.channel.send(embed=embed, view=TicketView())
-        except Exception as e:
-            await interaction.channel.send(f"❌ Erro ao enviar painel de suporte: {e}")
-
-    @app_commands.command(name="editar_painel", description="Edita o título e descrição do painel de suporte mais recente")
-    @app_commands.describe(novo_titulo="O novo título do painel", nova_descricao="A nova descrição (use \\n para quebrar linhas)")
-    @is_admin()
-    async def editar_painel(self, interaction: discord.Interaction, novo_titulo: str, nova_descricao: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            async for message in interaction.channel.history(limit=10):
-                if message.author == self.bot.user and message.embeds:
-                    embed = message.embeds[0]
-                    embed.title = novo_titulo
-                    embed.description = nova_descricao.replace("\\n", "\n")
-                    
-                    await message.edit(embed=embed)
-                    await interaction.followup.send("✅ Painel editado com sucesso!", ephemeral=True)
-                    return
-            
-            await interaction.followup.send("❌ Não encontrei nenhum painel (embed) enviado por mim neste canal.", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Erro ao editar: {e}", ephemeral=True)
-
-    @app_commands.command(name="loja_streaming", description="Envia o catálogo de Streaming (Admin)")
-    @is_admin()
-    async def loja_streaming(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Enviando catálogo de streaming...", ephemeral=True)
-        try:
-            res = supabase.table("products").select("*").execute()
-            products = [p for p in res.data if "streaming" in p.get("name", "").lower() or "netflix" in p.get("name", "").lower() or "disney" in p.get("name", "").lower() or "prime" in p.get("name", "").lower()]
-            if not products:
-                products = res.data
-
-            view = CatalogSelectView(products)
-            await interaction.channel.send(embed=view.get_embed(), view=view)
-        except Exception as e:
-            await interaction.channel.send(f"❌ Erro ao enviar loja de streaming: {e}")
-
-    @app_commands.command(name="loja_pc", description="Envia o catálogo de Otimização de PC (Admin)")
-    @is_admin()
-    async def loja_pc(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Enviando catálogo de PC...", ephemeral=True)
-        try:
-            res = supabase.table("products").select("*").execute()
-            products = [p for p in res.data if "otimiz" in p.get("name", "").lower() or "fps" in p.get("name", "").lower() or "pc" in p.get("name", "").lower()]
-            if not products:
-                products = res.data
-
-            view = CatalogSelectView(products)
-            await interaction.channel.send(embed=view.get_embed(), view=view)
-        except Exception as e:
-            await interaction.channel.send(f"❌ Erro ao enviar loja de PC: {e}")
-
-    @app_commands.command(name="loja_bots", description="Envia o catálogo de Bots (Admin)")
-    @is_admin()
-    async def loja_bots(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Enviando catálogo de bots...", ephemeral=True)
-        try:
-            res = supabase.table("products").select("*").execute()
-            products = [p for p in res.data if "bot" in p.get("name", "").lower()]
-            if not products:
-                products = res.data
-
-            view = CatalogSelectView(products)
-            await interaction.channel.send(embed=view.get_embed(), view=view)
-        except Exception as e:
-            await interaction.channel.send(f"❌ Erro ao enviar loja de bots: {e}")
-
-    @app_commands.command(name="adicionar_produto", description="Adiciona um novo produto à loja (Admin)")
-    @app_commands.describe(name="Nome", description="Descrição da vitrine", price="Preço", delivery_content="O que será enviado automaticamente", image_url="Link da imagem")
-    @is_admin()
-    async def adicionar_produto(self, interaction: discord.Interaction, name: str, description: str, price: float, delivery_content: str, image_url: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            data_to_insert = {
-                "name": name,
-                "description": description,
-                "price": price,
-                "delivery_content": delivery_content,
-                "image_url": image_url
-            }
-            supabase.table("products").insert(data_to_insert).execute()
-            await interaction.followup.send(f"✅ Produto **{name}** adicionado com sucesso!", ephemeral=True)
-        except Exception as e:
-            error_msg = traceback.format_exc()
-            await interaction.followup.send(f"❌ Erro ao adicionar produto:\n```py\n{error_msg[-1800:]}\n```", ephemeral=True)
-
-    @app_commands.command(name="editar_produto", description="Edita um produto existente informando o ID (Admin)")
-    @app_commands.describe(product_id="O ID numérico do produto que deseja editar")
-    @is_admin()
-    async def editar_produto(self, interaction: discord.Interaction, product_id: int):
-        try:
-            res = supabase.table("products").select("*").eq("id", product_id).execute()
-            if not res.data:
-                await interaction.response.send_message(f"❌ Nenhum produto encontrado com o ID `{product_id}`.", ephemeral=True)
-                return
-
-            prod = res.data[0]
-            modal = EditarProdutoModal(
-                product_id=prod["id"],
-                current_name=prod["name"],
-                current_desc=prod["description"],
-                current_delivery=prod.get("delivery_content", ""),
-                current_price=prod["price"],
-                current_img=prod.get("image_url", "")
-            )
-            await interaction.response.send_modal(modal)
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Erro ao carregar produto para edição: {e}", ephemeral=True)
-
-    @app_commands.command(name="set_banner", description="Altera o banner principal da loja (Admin)")
-    @app_commands.describe(url="Link direto da imagem do banner")
-    @is_admin()
-    async def set_banner(self, interaction: discord.Interaction, url: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            supabase.table("store_config").update({"banner_url": url}).eq("id", 1).execute()
-            await interaction.followup.send(f"✅ Banner atualizado com sucesso!\n🖼️ **URL:** {url}", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Erro ao atualizar banner: {e}", ephemeral=True)
-
-    @app_commands.command(name="set_cor", description="Altera a cor do tema da loja (Admin)")
-    @app_commands.describe(cor="Escolha a cor do tema")
-    @app_commands.choices(cor=[
-        app_commands.Choice(name="Preto", value="black"),
-        app_commands.Choice(name="Azul", value="blue"),
-        app_commands.Choice(name="Verde", value="green"),
-        app_commands.Choice(name="Vermelho", value="red"),
-        app_commands.Choice(name="Dourado/Ouro", value="gold"),
-        app_commands.Choice(name="Roxo", value="purple")
-    ])
-    @is_admin()
-    async def set_cor(self, interaction: discord.Interaction, cor: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            supabase.table("store_config").update({"embed_color": cor}).eq("id", 1).execute()
-            await interaction.followup.send(f"✅ Cor do tema alterada para **{cor}**!", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Erro ao atualizar cor: {e}", ephemeral=True)
-
-async def setup(bot):
-    await bot.add_cog(Store(bot))
+            await interaction.followup.send(f"❌ Erro ao processar compra:\n```py\n{error_msg[-1800:]}\n
